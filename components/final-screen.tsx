@@ -10,14 +10,13 @@ interface FinalScreenProps {
 }
 
 export function FinalScreen({ selectedPlan, onBack }: FinalScreenProps) {
-  // Estado para controlar a posição exata (top/left)
+  // Estado para controlar a posição (top/left)
+  // null significa "posição original ao lado do Sim"
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
-  const [noButtonSize, setNoButtonSize] = useState(1)
   const [attempts, setAttempts] = useState(0)
   
-  // Ref para capturar o tamanho da tela/container
+  // Refs para medir a tela e o botão
   const containerRef = useRef<HTMLDivElement>(null)
-  // Ref para o botão não, para sabermos o tamanho dele antes de mover
   const noBtnRef = useRef<HTMLButtonElement>(null)
 
   const planNames = {
@@ -27,28 +26,35 @@ export function FinalScreen({ selectedPlan, onBack }: FinalScreenProps) {
   }
 
   const handleNoInteraction = () => {
+    // Se não tiver as referências, não faz nada
     if (!containerRef.current || !noBtnRef.current) return
 
     const containerRect = containerRef.current.getBoundingClientRect()
     const btnRect = noBtnRef.current.getBoundingClientRect()
 
-    // Margem de segurança para o botão não colar na borda exata
-    const safeMargin = 20
+    // Margem de segurança para o botão não colar na borda (30px)
+    const padding = 30
 
-    // Calcula a área máxima onde o botão pode aparecer dentro do container
-    // Subtraímos o tamanho do botão para ele não nascer cortado na direita/fundo
-    const maxLeft = containerRect.width - btnRect.width - safeMargin
-    const maxTop = containerRect.height - btnRect.height - safeMargin
+    // Calcula a largura e altura DISPONÍVEIS (subtraindo o tamanho do botão e padding)
+    // Isso garante matematicamente que ele não pode sair da área
+    const maxLeft = containerRect.width - btnRect.width - padding
+    const maxTop = containerRect.height - btnRect.height - padding
 
-    // Gera coordenadas aleatórias DENTRO desses limites seguros
-    // Math.max garante que não seja menor que a margem (não sai pela esquerda/topo)
-    const newLeft = Math.max(safeMargin, Math.random() * maxLeft)
-    const newTop = Math.max(safeMargin, Math.random() * maxTop)
+    // Gera coordenadas aleatórias mas força a serem no mínimo 'padding' (lado esquerdo/topo)
+    // e no máximo 'maxLeft/maxTop' (lado direito/fundo)
+    const newLeft = Math.max(padding, Math.random() * maxLeft)
+    const newTop = Math.max(padding, Math.random() * maxTop)
 
     setPosition({ left: newLeft, top: newTop })
-    setNoButtonSize(Math.max(0.6, noButtonSize - 0.05)) // Diminui um pouco menos agressivamente
     setAttempts((prev) => prev + 1)
   }
+
+  // Função para resetar se a tela for redimensionada (evita bugs no resize)
+  useEffect(() => {
+    const handleResize = () => setPosition(null)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   const handleYesClick = () => {
     const planName = selectedPlan ? planNames[selectedPlan] : "a experiência gastronômica"
@@ -57,14 +63,16 @@ export function FinalScreen({ selectedPlan, onBack }: FinalScreenProps) {
     window.open(`https://wa.me/${phoneNumber}?text=${message}`, "_blank")
   }
 
-  const yesButtonSize = Math.min(2.5, 1 + attempts * 0.15)
+  // O botão Sim cresce, mas limitamos a 1.5x para não empurrar tudo para fora da tela
+  const yesButtonSize = Math.min(1.5, 1 + attempts * 0.1)
 
   return (
     <div
       ref={containerRef}
-      className="relative min-h-screen w-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent/20 via-background to-secondary p-3 md:p-4"
+      // h-screen e overflow-hidden GARANTEM que a área de fuga é exatamente o que a pessoa vê
+      className="relative h-[100dvh] w-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-accent/20 via-background to-secondary"
     >
-      {/* Background Hearts */}
+      {/* Background Decorativo */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {[...Array(12)].map((_, i) => (
           <Heart
@@ -81,72 +89,76 @@ export function FinalScreen({ selectedPlan, onBack }: FinalScreenProps) {
         ))}
       </div>
 
-      <Button onClick={onBack} variant="ghost" size="sm" className="absolute top-4 left-4 z-30 text-xs md:text-sm">
+      <Button onClick={onBack} variant="ghost" size="sm" className="absolute top-4 left-4 z-50 text-xs md:text-sm">
         <ArrowLeft className="mr-1 w-3 h-3 md:w-4 md:h-4" />
         Voltar
       </Button>
 
-      <div className="relative z-10 w-full max-w-2xl mx-auto text-center space-y-6 md:space-y-12 animate-in fade-in-up duration-700 flex flex-col items-center">
-        {/* Question */}
-        <div className="space-y-2 md:space-y-4 px-2">
-          <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold text-foreground text-balance leading-tight">
+      {/* Container Central do Conteúdo */}
+      <div className="relative z-10 w-full max-w-4xl px-4 flex flex-col items-center justify-center space-y-8 animate-in fade-in-up duration-700">
+        
+        {/* Texto da Pergunta */}
+        <div className="space-y-4 text-center">
+          <h2 className="text-3xl md:text-5xl font-bold text-foreground text-balance leading-tight drop-shadow-sm">
             {selectedPlan ? `Aceita o convite para ${planNames[selectedPlan]}?` : "Então, aceita o convite?"}
           </h2>
-          <p className="text-sm md:text-xl text-muted-foreground text-pretty">
+          <p className="text-lg md:text-xl text-muted-foreground">
             A escolha é sua... 
           </p>
         </div>
 
-        {/* Buttons Container */}
-        <div className="relative flex flex-col sm:flex-row items-center justify-center gap-4 md:gap-8 min-h-[120px] w-full">
+        {/* Área dos Botões */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-6 w-full min-h-[100px]">
           
-          {/* Yes Button */}
+          {/* Botão SIM */}
           <Button
             onClick={handleYesClick}
             size="lg"
-            className="text-base md:text-lg px-8 md:px-12 py-6 md:py-8 bg-accent hover:bg-accent/90 text-accent-foreground shadow-xl hover:shadow-2xl transition-all duration-300 relative z-20"
+            className="text-lg px-10 py-8 bg-accent hover:bg-accent/90 text-accent-foreground shadow-xl hover:shadow-2xl transition-all duration-300 relative z-20"
             style={{
               transform: `scale(${yesButtonSize})`,
-              transition: "transform 0.3s ease",
+              transition: "transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
             }}
           >
-            <Heart className="mr-2 w-5 h-5 md:w-6 md:h-6 fill-current" />
+            <Heart className="mr-2 w-6 h-6 fill-current animate-pulse" />
             Sim! 💕
           </Button>
 
-          {/* No Button */}
+          {/* Botão NÃO */}
           <Button
             ref={noBtnRef}
+            // Eventos para mouse e touch
             onMouseEnter={handleNoInteraction}
             onTouchStart={(e) => {
-               // Previne o clique real no mobile para dar tempo de fugir
-               e.preventDefault(); 
+               e.preventDefault(); // Impede o clique real no celular
                handleNoInteraction();
             }}
             variant="outline"
             size="lg"
-            className={`text-base md:text-lg px-8 md:px-12 py-6 md:py-8 border-2 transition-all duration-200 bg-background z-50 ${position ? 'absolute' : 'relative'}`}
-            style={{
-              // Se tiver position (já interagiu), usa absolute top/left.
-              // Se não, segue o fluxo normal (relative) ao lado do botão Sim.
-              top: position ? position.top : 'auto',
-              left: position ? position.left : 'auto',
-              transform: `scale(${noButtonSize})`,
-              transition: "top 0.2s ease-out, left 0.2s ease-out, transform 0.2s ease",
-            }}
+            className={`
+              text-lg px-10 py-8 border-2 bg-background font-semibold shadow-md
+              transition-all duration-300 ease-out
+              ${position ? 'absolute z-50' : 'relative z-20'} 
+            `}
+            // Se position existir (já interagiu), aplica absolute top/left.
+            // Se for null (estado inicial), o botão fica relative ao lado do Sim.
+            style={position ? {
+              top: position.top,
+              left: position.left,
+            } : {}}
           >
-            <Frown className="mr-2 w-5 h-5 md:w-6 md:h-6" />
+            <Frown className="mr-2 w-6 h-6" />
             Não...
           </Button>
         </div>
 
-        {/* Encouraging messages - Fixed positioning to avoid layout shift */}
-        <div className="h-8 md:h-10 mt-4 px-2">
+        {/* Frases Divertidas */}
+        <div className="h-12 flex items-center justify-center text-center px-4">
             {attempts > 0 && (
-            <p className="text-sm md:text-lg text-muted-foreground italic animate-in fade-in duration-300">
+            <p className="text-sm md:text-lg text-muted-foreground italic animate-in fade-in slide-in-from-bottom-2 duration-300">
                 {attempts < 3 && "Você tem certeza? 🥺"}
-                {attempts >= 3 && attempts < 6 && "Vamos lá, dá uma chance! 💕"}
-                {attempts >= 6 && attempts < 10 && "O botão 'Sim' tá crescendo, é um sinal! ✨"}
+                {attempts >= 3 && attempts < 6 && "Pode parar de tentar clicar no não! 💕"}
+                {attempts >= 6 && attempts < 10 && "O botão 'Sim' tá enorme, clica nele! ✨"}
                 {attempts >= 10 && "Sua persistência é admirável, mas eu vou ganhar! 😄"}
             </p>
             )}
